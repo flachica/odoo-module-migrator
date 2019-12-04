@@ -31,7 +31,6 @@
             <field name="view_mode">tree,form</field>
             <field name="domain">[('custom_field','=','d')]</field>
         </record>
-
         <act_window
             id="act_window_example"
             name="Example"
