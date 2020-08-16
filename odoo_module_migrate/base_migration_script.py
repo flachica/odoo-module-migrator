@@ -6,6 +6,7 @@ from . import tools
 import re
 import pathlib
 import traceback
+from lxml import etree
 
 
 class BaseMigrationScript(object):
@@ -14,6 +15,7 @@ class BaseMigrationScript(object):
     _DEPRECATED_MODULES = []
     _FILE_RENAMES = {}
     _GLOBAL_FUNCTIONS = {}
+    _XML_REQUIRED_ATTRIBUTES = []
     _module_path = ''
 
     def run(self,
@@ -34,6 +36,8 @@ class BaseMigrationScript(object):
                 extension = os.path.splitext(filename)[1]
                 if extension not in _ALLOWED_EXTENSIONS:
                     continue
+                if extension == '.xml' and self._XML_REQUIRED_ATTRIBUTES:
+                    self.check_xml_required_attributes(filename, root)
                 self.process_file(
                     root,
                     filename,
@@ -159,6 +163,39 @@ class BaseMigrationScript(object):
             )
             manifest_path = pathlib.Path(new_manifest_file_name)
         return manifest_path
+
+    def check_xml_required_attributes(self, filename, directory):
+        file_to_check = directory + os.sep + filename
+        tree = etree.parse(file_to_check)
+        root = tree.getroot()
+
+        bad_labels = []
+        for required_attribute in self._XML_REQUIRED_ATTRIBUTES:
+            for type_element in required_attribute.keys():
+                for attribute_name in required_attribute[type_element]:
+                    bad_label = 0
+                    for element in root.findall('.//{}'.format(type_element)):
+                        if 'position' not in element.keys() \
+                                and attribute_name not in element.keys():
+                            bad_label += 1
+                    if bad_label:
+                        bad_labels.append(
+                            {
+                                'type_element': type_element,
+                                'attribute_name': attribute_name,
+                                'count': bad_label
+                            }
+                        )
+        for bad_label in bad_labels:
+            logger.error(
+                '{} {} without \'{}\' attribute in file {}'.
+                format(
+                    bad_label['count'],
+                    bad_label['type_element'],
+                    bad_label['attribute_name'],
+                    file_to_check
+                )
+            )
 
     def _rename_file(self,
                      module_path,

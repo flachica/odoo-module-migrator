@@ -3,19 +3,9 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 from odoo_module_migrate.base_migration_script import BaseMigrationScript
 
-# TODO
-# All <label> elements in views must have a for="" attribute.
-# All <filter> elements in search views must have a name attribute.
-# All <button> elements in a tree view should have a string attribute
-#   for accessibility.
-
 
 class MigrationScript(BaseMigrationScript):
-    # TODO
-    # All <label> elements in views must have a for="" attribute.
-    # All <filter> elements in search views must have a name attribute.
-    # All <button> elements in a tree view should have a string attribute
-    #   for accessibility.
+
     def __init__(self):
         self._TEXT_REPLACES = {
             ".py": {
@@ -49,4 +39,10 @@ class MigrationScript(BaseMigrationScript):
             ("website_rating_project", "removed"),
             ("website_sale_options", "removed"),
             ("website_sale_stock_options", "removed"),
+        ]
+
+        self._XML_REQUIRED_ATTRIBUTES = [
+            {'label': ['for']},
+            {'filter': ['name']},
+            {'button': ['string']}
         ]
