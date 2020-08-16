@@ -8,6 +8,12 @@ class MigrationScript(BaseMigrationScript):
 
     def __init__(self):
         # TODO: Call 2to3
+        self._TEXT_WARNINGS = {
+            ".xml": {
+                r"ir\.cron":
+                    "[11] model now is called model_id, function is called code",
+            },
+        }
 
         self._TEXT_REPLACES = {
             "*": {

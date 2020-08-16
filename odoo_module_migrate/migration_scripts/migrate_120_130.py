@@ -6,14 +6,20 @@ from odoo_module_migrate.base_migration_script import BaseMigrationScript
 
 class MigrationScript(BaseMigrationScript):
     def __init__(self):
+
         self._TEXT_WARNINGS = {
+            ".xml": {
+                r".*active.*toggle_button": 'You can remove actions archive/unarchive',
+                r".*active.*boolean_button": 'You can remove actions archive/unarchive'
+            },
             ".py": {
                 r".*compute=.*\n":
                     "[13] Computed fields have change. "
                     "Review non-stored return value and stored not expect default value",
+                r".*oldname": "oldname is not supported yet. Create a migration script",
+                r"Float.*digits.*precision": 'You can use string to qualify type of precision without import nothing'
             },
         }
-
         self._TEXT_ERRORS = {
             "*": {
                 "web_settings_dashboard":
