@@ -12,6 +12,7 @@ from lxml import etree
 class BaseMigrationScript(object):
     _TEXT_REPLACES = {}
     _TEXT_ERRORS = {}
+    _TEXT_WARNINGS = {}
     _DEPRECATED_MODULES = []
     _FILE_RENAMES = {}
     _GLOBAL_FUNCTIONS = {}
@@ -99,6 +100,12 @@ class BaseMigrationScript(object):
         for pattern, error_message in errors.items():
             if re.findall(pattern, new_text):
                 logger.error(error_message)
+
+        warnings = self._TEXT_WARNINGS.get("*", {})
+        warnings.update(self._TEXT_WARNINGS.get(extension, {}))
+        for pattern, warning_message in warnings.items():
+            if re.findall(pattern, new_text):
+                logger.warning(warning_message + '. File ' + root + os.sep + filename)
 
     def handle_deprecated_modules(self, manifest_path, deprecated_modules):
         current_manifest_text = tools._read_content(manifest_path)

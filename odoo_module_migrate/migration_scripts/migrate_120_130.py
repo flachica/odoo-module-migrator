@@ -6,6 +6,14 @@ from odoo_module_migrate.base_migration_script import BaseMigrationScript
 
 class MigrationScript(BaseMigrationScript):
     def __init__(self):
+        self._TEXT_WARNINGS = {
+            ".py": {
+                r".*compute=.*\n":
+                    "[13] Computed fields have change. "
+                    "Review non-stored return value and stored not expect default value",
+            },
+        }
+
         self._TEXT_ERRORS = {
             "*": {
                 "web_settings_dashboard":
