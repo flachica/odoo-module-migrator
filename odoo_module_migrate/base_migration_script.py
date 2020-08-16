@@ -5,6 +5,7 @@ from .log import logger
 from . import tools
 import re
 import pathlib
+import traceback
 
 
 class BaseMigrationScript(object):
@@ -15,9 +16,6 @@ class BaseMigrationScript(object):
     _GLOBAL_FUNCTIONS = {}
     _module_path = ''
 
-    def __init__(self):
-        pass
-
     def run(self,
             module_path,
             manifest_path,
@@ -26,20 +24,9 @@ class BaseMigrationScript(object):
             directory_path,
             commit_enabled):
         logger.debug('Running %s script' % self.name)
-        file_renames = self._FILE_RENAMES or {}
-        text_replaces = self._TEXT_REPLACES or {}
-        text_errors = self._TEXT_ERRORS or {}
-        global_functions = self._GLOBAL_FUNCTIONS or {}
-        deprecated_modules = self._DEPRECATED_MODULES or {}
-
-        current_manifest_file_name = manifest_path.as_posix().split('/')[-1]
-        if current_manifest_file_name in file_renames:
-            new_manifest_file_name = manifest_path.as_posix().replace(
-                current_manifest_file_name,
-                file_renames[current_manifest_file_name]
-            )
-            manifest_path = pathlib.Path(new_manifest_file_name)
-
+        manifest_path = self._get_correct_manifest_path(
+            manifest_path,
+            self._FILE_RENAMES)
         for root, directories, filenames in os.walk(module_path.resolve()):
             for filename in filenames:
                 # Skip useless file
@@ -47,38 +34,69 @@ class BaseMigrationScript(object):
                 extension = os.path.splitext(filename)[1]
                 if extension not in _ALLOWED_EXTENSIONS:
                     continue
+                self.process_file(
+                    root,
+                    filename,
+                    extension,
+                    self._FILE_RENAMES,
+                    directory_path,
+                    commit_enabled
+                )
 
-                absolute_file_path = os.path.join(root, filename)
-                logger.debug("Migrate '%s' file" % absolute_file_path)
+        self.handle_deprecated_modules(manifest_path, self._DEPRECATED_MODULES)
 
-                # Rename file, if required
-                new_name = file_renames.get(filename)
-                if new_name:
-                    self._rename_file(
-                        directory_path,
-                        absolute_file_path,
-                        os.path.join(root, new_name),
-                        commit_enabled
-                    )
-                    absolute_file_path = os.path.join(root, new_name)
+        if self._GLOBAL_FUNCTIONS:
+            for function in self._GLOBAL_FUNCTIONS:
+                function(
+                    logger=logger,
+                    module_path=module_path,
+                    module_name=module_name,
+                    manifest_path=manifest_path,
+                    migration_steps=migration_steps,
+                    tools=tools,
+                )
 
-                # Operate changes in the file (replacements, removals)
-                replaces = text_replaces.get("*", {})
-                replaces.update(text_replaces.get(extension, {}))
+    def process_file(self,
+                     root,
+                     filename,
+                     extension,
+                     file_renames,
+                     directory_path,
+                     commit_enabled
+                     ):
+        # Skip useless file
+        # TODO, skip files present in some folders. (for exemple 'lib')
+        absolute_file_path = os.path.join(root, filename)
+        logger.debug("Migrate '%s' file" % absolute_file_path)
 
-                new_text = tools._replace_in_file(
-                    absolute_file_path, replaces,
-                    "Change file content of %s" % filename)
+        # Rename file, if required
+        new_name = file_renames.get(filename)
+        if new_name:
+            self._rename_file(
+                directory_path,
+                absolute_file_path,
+                os.path.join(root, new_name),
+                commit_enabled
+            )
+            absolute_file_path = os.path.join(root, new_name)
 
-                # Display errors if the new content contains some obsolete
-                # pattern
-                errors = text_errors.get("*", {})
-                errors.update(text_errors.get(extension, {}))
-                for pattern, error_message in errors.items():
-                    if re.findall(pattern, new_text):
-                        logger.error(error_message)
+        # Operate changes in the file (replacements, removals)
+        replaces = self._TEXT_REPLACES.get("*", {})
+        replaces.update(self._TEXT_REPLACES.get(extension, {}))
 
-        # Handle deprecated modules
+        new_text = tools._replace_in_file(
+            absolute_file_path, replaces,
+            "Change file content of %s" % filename)
+
+        # Display errors if the new content contains some obsolete
+        # pattern
+        errors = self._TEXT_ERRORS.get("*", {})
+        errors.update(self._TEXT_ERRORS.get(extension, {}))
+        for pattern, error_message in errors.items():
+            if re.findall(pattern, new_text):
+                logger.error(error_message)
+
+    def handle_deprecated_modules(self, manifest_path, deprecated_modules):
         current_manifest_text = tools._read_content(manifest_path)
         new_manifest_text = current_manifest_text
         for items in deprecated_modules:
@@ -129,20 +147,18 @@ class BaseMigrationScript(object):
                         "'%s' merged in '%s'. You should remove the"
                         " dependency to '%s' manually." % (
                             old_module, new_module, old_module))
-
         if current_manifest_text != new_manifest_text:
             tools._write_content(manifest_path, new_manifest_text)
 
-        if global_functions:
-            for function in global_functions:
-                function(
-                    logger=logger,
-                    module_path=module_path,
-                    module_name=module_name,
-                    manifest_path=manifest_path,
-                    migration_steps=migration_steps,
-                    tools=tools,
-                )
+    def _get_correct_manifest_path(self, manifest_path, file_renames):
+        current_manifest_file_name = manifest_path.as_posix().split('/')[-1]
+        if current_manifest_file_name in file_renames:
+            new_manifest_file_name = manifest_path.as_posix().replace(
+                current_manifest_file_name,
+                file_renames[current_manifest_file_name]
+            )
+            manifest_path = pathlib.Path(new_manifest_file_name)
+        return manifest_path
 
     def _rename_file(self,
                      module_path,
@@ -159,12 +175,15 @@ class BaseMigrationScript(object):
                 old_file_path.replace(str(module_path.resolve()), ""),
                 new_file_path.replace(str(module_path.resolve()), ""))
         )
-        if commit_enabled:
-            _execute_shell(
-                "git mv %s %s" % (old_file_path, new_file_path),
-                path=module_path)
-        else:
-            _execute_shell(
-                "mv %s %s" % (old_file_path, new_file_path),
-                path=module_path
-            )
+        try:
+            if commit_enabled:
+                _execute_shell(
+                    "git mv %s %s" % (old_file_path, new_file_path),
+                    path=module_path)
+            else:
+                _execute_shell(
+                    "mv %s %s" % (old_file_path, new_file_path),
+                    path=module_path
+                )
+        except BaseException:
+            logger.error(traceback.format_exc())
