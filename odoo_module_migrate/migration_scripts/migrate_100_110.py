@@ -2,19 +2,13 @@
 # @author: Sylvain LE GAL (https://twitter.com/legalsylvain)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 from odoo_module_migrate.base_migration_script import BaseMigrationScript
-
+from lxml import etree, html
+import os
 
 class MigrationScript(BaseMigrationScript):
 
     def __init__(self):
         # TODO: Call 2to3
-        self._TEXT_WARNINGS = {
-            ".xml": {
-                r"ir\.cron":
-                    "[11] model now is called model_id, function is called code",
-            },
-        }
-
         self._TEXT_REPLACES = {
             "*": {
                 r"ir.actions.report.xml": "ir.actions.report",
@@ -98,3 +92,71 @@ class MigrationScript(BaseMigrationScript):
              "website_rating_project"),
 
         ]
+
+    def process_file(self,
+                     root,
+                     filename,
+                     extension,
+                     file_renames,
+                     directory_path,
+                     commit_enabled
+                     ):
+        if extension == '.xml':
+            file_to_check = root + os.sep + filename
+            parser = etree.XMLParser(remove_blank_text=True)
+            tree = etree.parse(file_to_check, parser)
+            document_root = tree.getroot()
+            modified = False
+            for item in document_root:
+                if item.tag == 'data':
+                    for element in item:
+                        if not modified:
+                            modified = self.process_element(element)
+                else:
+                    if not modified:
+                        modified = self.process_element(item)
+            if modified:
+                with open(file_to_check, 'wb') as f:
+                    f.write(etree.tostring(tree, pretty_print=True))
+        super(MigrationScript, self).process_file(root, filename, extension, file_renames, directory_path, commit_enabled)
+
+    def process_element(self, element):
+        modified = False
+        if not element.tag is etree.Comment:
+            if element.get('model') == 'ir.cron':
+                model_element = element.xpath(".//field[@name='model']")
+                if model_element:
+                    model_name = model_element[0].get('eval').replace("'", "").replace('"', "")
+                    parent = model_element[0].getparent()
+                    parent.insert(
+                        parent.index(model_element[0]),
+                        etree.XML(
+                            '<field name="model_id" ref="model_{}"/>'.format(model_name)
+                        )
+                    )
+                    parent.remove(model_element[0])
+
+
+                cron_functions = element.xpath(".//field[@name='function']")
+                for cron_function in cron_functions:
+                    function_name = cron_function.text
+                    if not function_name:
+                        function_name = cron_function.attrib.get('eval').replace("'", "").replace('"', "")
+                    modified = True
+                    parent = cron_function.getparent()
+                    argEls = parent.xpath(".//field[@name='args']")
+                    args = '()'
+                    if argEls:
+                        args = argEls[0].text
+                        if not args:
+                            args = argEls[0].attrib.get('eval').replace("'", "").replace('"', "")
+                    parent.insert(
+                        parent.index(cron_function) + 1,
+                        etree.XML(
+                            '<field name="code">model.{}{}</field>'.format(function_name, args)
+                        )
+                    )
+                    parent.remove(cron_function)
+                    for argEl in argEls:
+                        parent.remove(argEl)
+        return modified
