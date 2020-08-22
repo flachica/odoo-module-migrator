@@ -2,13 +2,17 @@
 # @author: Sylvain LE GAL (https://twitter.com/legalsylvain)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 from odoo_module_migrate.base_migration_script import BaseMigrationScript
-from lxml import etree, html
+from lxml import etree
 import os
+from odoo_module_migrate.log import logger
+from sys import platform
+from odoo_module_migrate.tools import _execute_shell
+from pathlib import Path
+
 
 class MigrationScript(BaseMigrationScript):
 
     def __init__(self):
-        # TODO: Call 2to3
         self._TEXT_REPLACES = {
             "*": {
                 r"ir.actions.report.xml": "ir.actions.report",
@@ -93,6 +97,32 @@ class MigrationScript(BaseMigrationScript):
 
         ]
 
+    def run(self,
+            module_path,
+            manifest_path,
+            module_name,
+            migration_steps,
+            directory_path,
+            commit_enabled):
+        if platform == "linux" or platform == "linux2":
+            manifest_path = self._get_correct_manifest_path(
+                manifest_path,
+                self._FILE_RENAMES)
+            logger.debug('Linux detected. Call 2to3 script in {}'.format(directory_path))
+            try:
+                _execute_shell(
+                    "2to3 -wnj4 --no-diffs .",
+                    path=Path(directory_path))
+            except BaseException:
+                pass
+
+        super(MigrationScript, self).run(module_path,
+            manifest_path,
+            module_name,
+            migration_steps,
+            directory_path,
+            commit_enabled)
+
     def process_file(self,
                      root,
                      filename,
@@ -117,6 +147,7 @@ class MigrationScript(BaseMigrationScript):
                         modified = self.process_element(item)
             if modified:
                 with open(file_to_check, 'wb') as f:
+                    logger.debug('Cron migrated: {}'.format(file_to_check))
                     f.write(etree.tostring(tree, pretty_print=True))
         super(MigrationScript, self).process_file(root, filename, extension, file_renames, directory_path, commit_enabled)
 
