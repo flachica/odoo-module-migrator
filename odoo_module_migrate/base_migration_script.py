@@ -105,7 +105,8 @@ class BaseMigrationScript(object):
         warnings.update(self._TEXT_WARNINGS.get(extension, {}))
         for pattern, warning_message in warnings.items():
             if re.findall(pattern, new_text):
-                logger.warning(warning_message + '. File ' + root + os.sep + filename)
+                logger.warning(warning_message +
+                               '. File ' + root + os.sep + filename)
 
     def handle_deprecated_modules(self, manifest_path, deprecated_modules):
         current_manifest_text = tools._read_content(manifest_path)

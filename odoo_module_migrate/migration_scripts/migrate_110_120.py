@@ -10,10 +10,14 @@ class MigrationScript(BaseMigrationScript):
         self._TEXT_WARNINGS = {
             ".py": {
                 r".*fields\.Date\.from_string":
-                    "[12] from_string method not is needed. Use date object instead",
+                    "[12] from_string method not is needed. "
+                    "Use date object instead",
                 r".*fields\.Datetime\.from_string":
-                    "[12] from_string method not is needed. Use date object instead",
-                r"_parent_store": 'Review if you use parent_left or parent_right to replace it with parent_path'
+                    "[12] from_string method not is needed. "
+                    "Use date object instead",
+                r"_parent_store":
+                    'Review if you use parent_left or '
+                    'parent_right to replace it with parent_path'
             },
         }
 

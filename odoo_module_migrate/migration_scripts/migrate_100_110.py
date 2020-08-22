@@ -108,7 +108,8 @@ class MigrationScript(BaseMigrationScript):
             manifest_path = self._get_correct_manifest_path(
                 manifest_path,
                 self._FILE_RENAMES)
-            logger.debug('Linux detected. Call 2to3 script in {}'.format(directory_path))
+            logger.debug('Linux detected. Call 2to3 script in {}'.
+                         format(directory_path))
             try:
                 _execute_shell(
                     "2to3 -wnj4 --no-diffs .",
@@ -116,7 +117,8 @@ class MigrationScript(BaseMigrationScript):
             except BaseException:
                 pass
 
-        super(MigrationScript, self).run(module_path,
+        super(MigrationScript, self).run(
+            module_path,
             manifest_path,
             module_name,
             migration_steps,
@@ -149,30 +151,40 @@ class MigrationScript(BaseMigrationScript):
                 with open(file_to_check, 'wb') as f:
                     logger.debug('Cron migrated: {}'.format(file_to_check))
                     f.write(etree.tostring(tree, pretty_print=True))
-        super(MigrationScript, self).process_file(root, filename, extension, file_renames, directory_path, commit_enabled)
+        super(MigrationScript, self).\
+            process_file(
+            root,
+            filename,
+            extension,
+            file_renames,
+            directory_path,
+            commit_enabled
+        )
 
     def process_element(self, element):
         modified = False
-        if not element.tag is etree.Comment:
+        if element.tag is not etree.Comment:
             if element.get('model') == 'ir.cron':
                 model_element = element.xpath(".//field[@name='model']")
                 if model_element:
-                    model_name = model_element[0].get('eval').replace("'", "").replace('"', "")
+                    model_name = model_element[0].\
+                        get('eval').replace("'", "").replace('"', "")
                     parent = model_element[0].getparent()
                     parent.insert(
                         parent.index(model_element[0]),
                         etree.XML(
-                            '<field name="model_id" ref="model_{}"/>'.format(model_name)
+                            '<field name="model_id" ref="model_{}"/>'.
+                            format(model_name)
                         )
                     )
                     parent.remove(model_element[0])
-
 
                 cron_functions = element.xpath(".//field[@name='function']")
                 for cron_function in cron_functions:
                     function_name = cron_function.text
                     if not function_name:
-                        function_name = cron_function.attrib.get('eval').replace("'", "").replace('"', "")
+                        function_name = cron_function.attrib.\
+                            get('eval').replace("'", "").replace('"', "")
                     modified = True
                     parent = cron_function.getparent()
                     argEls = parent.xpath(".//field[@name='args']")
@@ -180,11 +192,13 @@ class MigrationScript(BaseMigrationScript):
                     if argEls:
                         args = argEls[0].text
                         if not args:
-                            args = argEls[0].attrib.get('eval').replace("'", "").replace('"', "")
+                            args = argEls[0].attrib.get('eval').\
+                                replace("'", "").replace('"', "")
                     parent.insert(
                         parent.index(cron_function) + 1,
                         etree.XML(
-                            '<field name="code">model.{}{}</field>'.format(function_name, args)
+                            '<field name="code">model.{}{}</field>'.
+                            format(function_name, args)
                         )
                     )
                     parent.remove(cron_function)
